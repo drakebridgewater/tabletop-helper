@@ -377,7 +377,7 @@ function renderSetup() {
       <div class="line wrap">${btn("Add player", "addPlayer", { sm: true, disabled: full })}
         ${avail.map((nm) => btn(`+ ${esc(nm)}`, "addPlayer", { v: "quiet", sm: true, data: `data-name="${esc(nm)}"`, disabled: full })).join("")}</div></section>
     ${opts ? `<section><h2>${num()}${def.optionsLabel || "Options"}</h2><div class="exps">${opts}</div></section>` : ""}
-    <section><h2>${num()}Session ${app.sessionId}</h2>
+    <section><div class="line between"><h2>${num()}Session ${app.sessionId}</h2>${btn("Delete", "deleteGame", { v: "quiet", sm: true, aria: `Delete session ${app.sessionId}` })}</div>
       <p class="bw-comment small">${fin ? `Result saved ${fmtDate(fin)}. Saving again updates it.` : "In progress. Save the result when you finish scoring."}</p>
       <div class="acts">${btn(fin ? "Update result" : "Save result", "finish", { v: "primary" })}${btn("New session, same players", "newGame", { data: `data-from="${app.sessionId}"` })}</div></section>
   </div>`;
@@ -528,6 +528,21 @@ const acts = {
       toast("Could not save the result. Check the connection and try again.");
     }
   },
+  // Deletes the open session for everyone, and its copy on this device.
+  deleteGame: (el) => arm(el, async () => {
+    const id = app.sessionId;
+    const def = app.def;
+    try {
+      await api(`/api/games/${id}`, { method: "DELETE" });
+    } catch (e) {
+      if (e.status !== 404) return toast("Deleting a session needs the server. Check the connection.");
+    }
+    ["game", "pending", "ui"].forEach((k) => local.del(`tabletop:${k}:${id}`));
+    if (String(local.get(`tabletop:last:${def.slug}`)) === String(id)) local.del(`tabletop:last:${def.slug}`);
+    closeSession();
+    toast(`Session ${id} deleted.`);
+    go(`/${def.slug}`);
+  }, "Delete for everyone?"),
   newGame: async (el) => {
     const def = getDef(app.route.slug);
     try {
