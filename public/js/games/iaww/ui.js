@@ -1,8 +1,10 @@
-// It's a Wonderful World tracker screens: the production table, the card form
-// and the round history. Browser only; app.js installs this when an IAWW
+// It's a Wonderful World tracker screens: the production table, the card form,
+// the card picker and the round history. Browser only; app.js installs this when an IAWW
 // session opens and hands it the session context.
 
 import * as Rules from "./rules.js";
+import { advise, cardLabel } from "./advisor.js";
+import { cardsFor, toCard, matchCards, optionsFor } from "./cards.js";
 import { playerName } from "../../core/score.js";
 import { uid } from "../../core/store.js";
 import { $, esc, chip, btn, icon, initials } from "../../core/ui.js";
@@ -70,7 +72,7 @@ export default function install(ctx) {
         <div class="line between"><h3 class="ellipsis">${esc(me.name || "Unnamed")}</h3><span class="bw-count">${s.vp} VP</span></div>
         <div class="counts">${R.TYPES.map((t) => `<span title="${t.label}">${chip(t.c)}<span class="bw-mono">${s.counts[t.k]}</span></span>`).join("")}<span class="bw-comment">built</span></div>
         <div class="toks">${toks}</div>
-        <div class="acts">${btn("Log card", "newCard", { v: "primary" })}${btn("Empire", "empire", { aria: emp ? "Edit empire card" : "Set empire card" })}${btn("Undo", "undo")}</div>
+        <div class="acts">${btn("Log card", "newCard", { v: "primary" })}${btn("Picker", "showPicker", { aria: "Card picker" })}${btn("Empire", "empire", { aria: emp ? "Edit empire card" : "Set empire card" })}${btn("Undo", "undo")}</div>
       </section></div>`;
   }
 
@@ -85,6 +87,13 @@ export default function install(ctx) {
   function blankDraft(type) {
     return { player: ui.active, type, cost: {}, prod: {}, corr: {}, scale: { res: "", per: "", n: 0 }, bonus: {}, recycle: "", vp: 0, combo: { t: "", x: 0 }, duo: { a: "", b: "", x: 0 }, tab: {}, custom: {} };
   }
+  // Cards the form is narrowing down, set by renderCardForm; empty for an Empire.
+  let formDb = [];
+  // Whether `path` can take value `v` and still match a known card. Clearing a
+  // value is always allowed, and nothing is limited once no card matches, so a
+  // card missing from the list can still be entered.
+  const can = (path, v) =>
+    !formDb.length || !v || get(ui.draft, path) === v || !matchCards(ui.draft, formDb).length || optionsFor(ui.draft, formDb, path).has(v);
   function cubeRow(path, color, label) {
     const d = ui.draft;
     const v = get(d, path) || 0;
@@ -92,7 +101,7 @@ export default function install(ctx) {
     let h = `<div class="cubes" role="radiogroup" aria-label="${label}">`;
     for (let n = 0; n <= 5; n++) {
       const on = !custom && v === n;
-      h += `<button type="button" class="cube${n === 0 ? " zero" : ""}${color ? "" : " plain"}" ${color ? `style="--c:var(${color});--on:var(${color}-on)"` : ""} role="radio" data-act="cube" data-path="${path}" data-n="${n}" aria-checked="${on}" aria-label="${n} ${label}">${n}</button>`;
+      h += `<button type="button" class="cube${n === 0 ? " zero" : ""}${color ? "" : " plain"}" ${color ? `style="--c:var(${color});--on:var(${color}-on)"` : ""} role="radio" data-act="cube" data-path="${path}" data-n="${n}" aria-checked="${on}" aria-label="${n} ${label}"${can(path, n) ? "" : " disabled"}>${n}</button>`;
     }
     h += `<button type="button" class="cube more" role="radio" data-act="customCube" data-path="${path}" aria-checked="${custom}">More</button>`;
     if (custom) h += numIn(path, `Custom ${label}`, "custom-in");
@@ -106,18 +115,38 @@ export default function install(ctx) {
     const tabs = keys
       .map((k) => {
         const val = get(d, sec + "." + k) || 0;
-        return `<button type="button" class="ctab" data-act="ctab" data-sec="${sec}" data-k="${k}" aria-pressed="${k === cur}">${chip(R.KEYS[k].c, R.KEYS[k].round)}${R.KEYS[k].s}${val ? `<b class="bw-mono">${val}</b>` : ""}</button>`;
+        // Dim a resource no remaining card has here.
+        const dim = formDb.length && !val && [...optionsFor(d, formDb, sec + "." + k)].every((x) => !x);
+        return `<button type="button" class="ctab${dim ? " dim" : ""}" data-act="ctab" data-sec="${sec}" data-k="${k}" aria-pressed="${k === cur}">${chip(R.KEYS[k].c, R.KEYS[k].round)}${R.KEYS[k].s}${val ? `<b class="bw-mono">${val}</b>` : ""}</button>`;
       })
       .join("");
     return `<div class="ctabs">${tabs}</div>${cubeRow(sec + "." + cur, R.KEYS[cur].c, R.KEYS[cur].label)}`;
   }
-  const opts = (list, cur, blank) =>
-    (blank ? `<option value="">${blank}</option>` : "") + list.map((o) => `<option value="${o.k}" ${cur === o.k ? "selected" : ""}>${o.label}</option>`).join("");
-  const sel = (path, list, blank, aria) => `<select class="bw-field__control" data-act="draftSel" data-path="${path}" aria-label="${aria}">${opts(list, get(ui.draft, path), blank)}</select>`;
+  const opts = (list, cur, blank, path) =>
+    (blank ? `<option value="">${blank}</option>` : "") +
+    list.map((o) => `<option value="${o.k}" ${cur === o.k ? "selected" : ""}${path && !can(path, o.k) ? " disabled" : ""}>${o.label}</option>`).join("");
+  const sel = (path, list, blank, aria) => `<select class="bw-field__control" data-act="draftSel" data-path="${path}" aria-label="${aria}">${opts(list, get(ui.draft, path), blank, path)}</select>`;
+
+  // The cards still matching what is entered: the name fills in once one is left.
+  function matchRow(d) {
+    if (!formDb.length) return "";
+    const m = matchCards(d, formDb);
+    if (m.length === 1 && (!d.name || d.autoName)) Object.assign(d, { name: m[0].name, autoName: true });
+    else if (m.length !== 1 && d.autoName) {
+      delete d.name;
+      delete d.autoName;
+    }
+    if (!m.length) return `<div class="matches"><span class="bw-comment">No known card matches. It logs as entered.</span></div>`;
+    const chips = m.slice(0, 12).map((c) => `<button type="button" class="ctab" data-act="matchFill" data-i="${formDb.indexOf(c)}" aria-label="Fill in ${esc(c.name)}">${esc(c.name)}</button>`).join("");
+    const lead = m.length === 1 ? `<span class="bw-comment">Card</span>` : `<span class="bw-comment"><span class="bw-mono">${m.length}</span> match</span>`;
+    return `<div class="matches">${lead}${chips}</div>`;
+  }
 
   function renderCardForm(g) {
     const d = ui.draft;
     const emp = d.type === "empire";
+    formDb = emp ? [] : cardsFor(g);
+    const matches = matchRow(d);
     const secs = emp ? ["prod", "vp"] : ["cost", "prod"].concat(g.exp.ca ? ["corr"] : [], ["bonus", "vp"]);
     const SEC = { cost: "Cost", prod: "Produce", corr: "Corrupt", bonus: "Bonus", vp: "VP" };
     const sec = secs.includes(d.sec) ? d.sec : secs[0];
@@ -138,18 +167,60 @@ export default function install(ctx) {
     if (sec === "corr") body = picker("corr", R.RES_KEYS);
     if (sec === "bonus")
       body = `<span class="bw-comment">Construction bonus</span>${picker("bonus", ["fin", "gen", "kry"])}
-        <span class="bw-comment sub">Recycling bonus</span><div class="ctabs">${R.RES.map((r) => `<button type="button" class="ctab" data-act="recycle" data-k="${r.k}" aria-pressed="${d.recycle === r.k}">${chip(r.c)}${r.label}</button>`).join("")}</div>`;
+        <span class="bw-comment sub">Recycling bonus</span><div class="ctabs">${R.RES.map((r) => `<button type="button" class="ctab" data-act="recycle" data-k="${r.k}" aria-pressed="${d.recycle === r.k}"${can("recycle", r.k) ? "" : " disabled"}>${chip(r.c)}${r.label}</button>`).join("")}</div>`;
     if (sec === "vp")
       body = (emp ? "" : `<span class="bw-comment">Printed VP</span>${cubeRow("vp", "", "VP")}`) +
         `<div class="line wrap sub">${numIn("combo.x", "VP each")}<span class="bw-comment">VP per</span>${sel("combo.t", targets, "none", "Scoring target")}</div>` +
         (g.exp.ca && !emp
           ? `<div class="line wrap">${numIn("duo.x", "VP per duo")}<span class="bw-comment">VP per duo of</span>${sel("duo.a", targets, "none", "Duo first type")}<span class="bw-comment">+</span>${sel("duo.b", targets, "none", "Duo second type")}</div>`
           : "");
-    return `${sheetHead(`${emp ? "Empire" : "Log card"} · ${esc(R.playerName(g, d.player))} · round ${g.round}`)}
-      ${emp ? "" : `<div class="typegrid">${R.TYPES.map((t) => `<button type="button" data-act="type" data-k="${t.k}" aria-pressed="${d.type === t.k}">${chip(t.c)}${t.label}</button>`).join("")}</div>`}
+    const title = emp ? "Empire" : d.pick ? "Add to hand" : "Log card";
+    return `${sheetHead(`${title} · ${esc(R.playerName(g, d.player))} · round ${g.round}`)}
+      ${emp ? "" : `<div class="typegrid">${R.TYPES.map((t) => `<button type="button" data-act="type" data-k="${t.k}" aria-pressed="${d.type === t.k}"${can("type", t.k) ? "" : " disabled"}>${chip(t.c)}${t.label}</button>`).join("")}</div>`}
       <div class="secs" role="tablist">${secs.map((k) => { const n = filled(k); return `<button type="button" role="tab" data-act="sec" data-k="${k}" aria-selected="${k === sec}">${SEC[k]}${n ? `<b class="bw-mono">${n}</b>` : ""}</button>`; }).join("")}</div>
+      <div class="sh-body">${body}</div>${matches}
+      <div class="sh-foot"><p class="sum">${d.name ? `<b>${esc(d.name)}</b> · ` : ""}${esc(R.cardSummary(d))}</p>${btn(emp ? "Save empire" : d.pick ? "Add to hand" : "Log card", "saveCard", { v: "primary" })}</div>`;
+  }
+
+  /* ---------- card picker: rank the hand you were passed ---------- */
+  const hand = () => (ui.pick = ui.pick && Array.isArray(ui.pick.hand) ? ui.pick : { hand: [] }).hand;
+  function ranked(g) {
+    const me = active();
+    return advise({
+      me: R.stats(g, me),
+      round: g.round,
+      opps: g.players.filter((p) => p.id !== me.id).map((p) => ({ name: p.name || "Unnamed", prod: R.stats(g, p).prod })),
+      tokPref: g.tokPref,
+      ca: !!g.exp.ca,
+      hand: hand().map(toCard),
+    });
+  }
+  function renderPicker(g) {
+    const me = active();
+    const list = ranked(g);
+    const db = cardsFor(g);
+    let body;
+    if (!list.length)
+      body = `<p class="bw-comment">Add each card in the hand you were passed. The picker ranks them, says whether to build or recycle, and why.</p>
+        <p class="bw-comment">It reads ${esc(me.name || "Unnamed")}'s built cards and tokens, the round, and everyone's production for supremacy.</p>`;
+    else
+      body = `<ol class="picks">${list
+        .map((x, n) => {
+          const name = esc(cardLabel(x.card, x.i));
+          return `<li><div class="pk">
+            <div class="line"><span class="bw-mono pk-n">${n + 1}</span>${chip((R.TYPES.find((t) => t.k === x.card.type) || {}).c)}<b class="ellipsis">${name}</b>
+              <span class="pk-v${x.action === "recycle" ? " rec" : ""}">${x.action === "build" ? "Build" : "Recycle"}</span><span class="bw-mono pk-s">${x.score.toFixed(1)}</span></div>
+            <small class="why">${esc(x.reason)}</small></div>
+            <div class="pk-acts">${btn("Take", "pickTake", { v: n ? "secondary" : "primary", sm: true, data: `data-i="${x.i}"`, aria: `Take ${name} and ${x.action} it` })}
+            ${btn(icon("close"), "pickDel", { v: "quiet", sm: true, cls: "bw-btn--icon", data: `data-i="${x.i}"`, aria: `Remove ${name} from the hand` })}</div></li>`;
+        })
+        .join("")}</ol>`;
+    const from = db.length
+      ? `<select class="bw-field__control pk-db" data-act="pickDb" aria-label="Add a card from the list"><option value="">Add from list</option>${R.TYPES.map((t) => `<optgroup label="${t.label}">${db.map((c, i) => (c.type === t.k ? `<option value="${i}">${esc(c.name)}${c.pack ? ` (${c.pack})` : ""}</option>` : "")).join("")}</optgroup>`).join("")}</select>`
+      : "";
+    return `${sheetHead(`Card picker · ${esc(me.name || "Unnamed")} · round ${g.round}`)}
       <div class="sh-body">${body}</div>
-      <div class="sh-foot"><p class="sum">${esc(R.cardSummary(d))}</p>${btn(emp ? "Save empire" : "Log card", "saveCard", { v: "primary" })}</div>`;
+      <div class="sh-foot">${from || `<p class="sum">${list.length ? `${list.length} in hand. Score is about VP gained.` : "No cards yet."}</p>`}${btn("Clear", "pickClear", { v: "quiet", disabled: !list.length })}${btn("Add card", "pickAdd", { v: "primary" })}</div>`;
   }
 
   function renderLog(g) {
@@ -162,7 +233,8 @@ export default function install(ctx) {
         let main;
         let sub;
         const who = esc(R.playerName(g, e.player));
-        if (e.kind === "build") [main, sub] = [`${who} · ${R.typeLabel(e.card.type)}`, R.cardSummary(e.card)];
+        if (e.kind === "build") [main, sub] = [`${who} · ${esc(e.card.name || R.typeLabel(e.card.type))}`, R.cardSummary(e.card)];
+        else if (e.kind === "recycle") [main, sub] = [`${who} · recycled ${esc(e.card.name || R.typeLabel(e.card.type))}`, `+1 ${R.resLabel(e.res)}`];
         else if (e.kind === "award") [main, sub] = [`${who} · ${R.resLabel(e.res)} supremacy`, `+1 ${R.TOK[e.token].label}`];
         else [main, sub] = [`${who} · ${R.TOK[e.token].label} ${e.n > 0 ? "+1" : "−1"}`, "Manual adjustment"];
         h += `<li><div>${main}<small>${esc(sub)}</small></div>${btn("Remove", "delEvent", { v: "quiet", sm: true, data: `data-id="${e.id}"` })}</li>`;
@@ -243,12 +315,66 @@ export default function install(ctx) {
     },
     saveCard: () => {
       const d = ui.draft;
-      const card = structuredClone(d);
-      ["player", "tab", "custom", "sec"].forEach((k) => delete card[k]);
+      // A card the form narrowed to one match is saved with all its stats; what
+      // was entered already agrees with them.
+      const only = d.autoName && cardsFor(game()).find((c) => c.name === d.name && matchCards(d, [c]).length);
+      const card = only ? Object.assign(structuredClone(d), structuredClone(toCard(only))) : structuredClone(d);
+      ["player", "tab", "custom", "sec", "pick", "autoName"].forEach((k) => delete card[k]);
+      if (d.pick) {
+        hand().push(card);
+        ui.draft = null;
+        ui.sheet = "picker";
+        saveUi();
+        return render();
+      }
       const event = { id: uid(), t: Date.now(), round: game().round, kind: "build", player: d.player, card };
       dispatch(d.type === "empire" ? { type: "setEmpire", event } : { type: "log", event });
       toast(`Logged ${R.typeLabel(card.type)} for ${R.playerName(game(), d.player)}.`);
       closeSheet();
+    },
+    // Fills the form from a matching card in the list.
+    matchFill: (el) => {
+      const c = cardsFor(game())[+el.dataset.i];
+      if (!c) return;
+      const d = ui.draft;
+      Object.assign(d, structuredClone(toCard(c)), { name: c.name, custom: {} });
+      delete d.autoName;
+      saveUi();
+      renderSheet();
+    },
+    showPicker: () => {
+      hand();
+      ui.sheet = "picker";
+      render();
+    },
+    pickAdd: () => {
+      ui.draft = Object.assign(blankDraft("structure"), { pick: true });
+      ui.sheet = "card";
+      saveUi();
+      render();
+    },
+    pickDel: (el) => {
+      hand().splice(+el.dataset.i, 1);
+      saveUi();
+      renderSheet();
+    },
+    pickClear: (el) => arm(el, () => {
+      hand().length = 0;
+      saveUi();
+      renderSheet();
+    }, "Clear hand?"),
+    // Logs the card for the player choosing, then empties the hand: the rest
+    // are passed on, and the next hand is a new one.
+    pickTake: (el) => {
+      const g = game();
+      const x = ranked(g).find((r) => r.i === +el.dataset.i);
+      if (!x) return;
+      const base = { id: uid(), t: Date.now(), round: g.round, player: active().id, card: x.card };
+      dispatch({ type: "log", event: x.action === "build" ? { ...base, kind: "build" } : { ...base, kind: "recycle", res: x.card.recycle } });
+      toast(`${x.action === "build" ? "Built" : "Recycled"} ${cardLabel(x.card, x.i)}. Add your next hand.`);
+      hand().length = 0;
+      saveUi();
+      render();
     },
     fill: (el) => arm(el, () => {
       dispatch({ type: "fillScorePad" });
@@ -260,6 +386,7 @@ export default function install(ctx) {
     views: { tracker: renderTracker },
     sheets: {
       card: { render: renderCardForm, label: "Log a card" },
+      picker: { render: renderPicker, label: "Card picker" },
       log: { render: renderLog, label: "Round history" },
     },
     acts,
@@ -274,6 +401,13 @@ export default function install(ctx) {
       return true;
     },
     onChange(t) {
+      if (t.dataset.act === "pickDb") {
+        const c = cardsFor(game())[+t.value];
+        if (c) hand().push(toCard(c));
+        saveUi();
+        renderSheet();
+        return true;
+      }
       if (t.dataset.act === "draftSel") {
         set(ui.draft, t.dataset.path, t.value);
         saveUi();

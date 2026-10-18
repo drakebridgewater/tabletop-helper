@@ -13,7 +13,7 @@ B.init({ sig: "teal" });
 
 const app = { me: null, store: null, sessionId: null, def: null, mod: null, route: { view: "library" }, sessions: null, recent: null, roster: [], showAll: false };
 // Per-device view state for the open session. Kept as one object so game screens can hold on to it.
-const ui = { active: null, draft: null, sheet: null, pad: null };
+const ui = { active: null, draft: null, sheet: null, pad: null, pick: null };
 
 /* ---------- shell ---------- */
 const statusSlot = document.createElement("span");
@@ -164,9 +164,9 @@ function closeSession() {
   app.store = app.mod = null;
   app.sessionId = null;
   app.def = null;
-  Object.assign(ui, { active: null, draft: null, sheet: null, pad: null });
+  Object.assign(ui, { active: null, draft: null, sheet: null, pad: null, pick: null });
 }
-const saveUi = () => app.sessionId && local.set(`tabletop:ui:${app.sessionId}`, { active: ui.active, draft: ui.draft });
+const saveUi = () => app.sessionId && local.set(`tabletop:ui:${app.sessionId}`, { active: ui.active, draft: ui.draft, pick: ui.pick });
 const game = () => app.store && app.store.state;
 const dispatch = (op) => app.store.dispatch(op);
 function active() {
