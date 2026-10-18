@@ -1,4 +1,4 @@
-/* Wonderful World scores: app layout on top of bridgewater.css.
+/* Tabletop: app layout on top of bridgewater.css.
    Mobile first: header, one view and the section links fill exactly one screen.
    Only the history list and long setup pages scroll, inside the view. */
 
@@ -147,13 +147,19 @@ html.locked .toast { bottom: auto; top: calc(var(--space-3) + env(safe-area-inse
 .exp { padding: var(--space-2) 0; border-bottom: var(--hairline) solid var(--line); }
 .exp .bw-field__hint { display: block; font-size: 13px; line-height: 18px; }
 
-/* ---------- games ---------- */
-.games h2 { font-size: 22px; }
-.games section { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
 .roster { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
 .rname { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; }
 .rname .bw-btn .bw-icon { width: 16px; height: 16px; }
 .sky { margin-top: auto; padding-top: var(--space-5); }
+
+/* ---------- library and game page ---------- */
+.lib section, .gp section { display: flex; flex-direction: column; gap: var(--space-2); }
+.lib { gap: var(--space-5) !important; }
+.lib > section > .bw-btn--quiet { align-self: flex-start; }
+.gp { gap: var(--space-5) !important; }
+.gp h2 { font-size: 24px; line-height: 30px; }
+.guide-links { gap: var(--space-5); font-weight: 500; }
+.games h2, .gp .h3 { font-size: 18px; }
 
 /* ---------- guide ---------- */
 .subnav { display: flex; gap: var(--space-5); border-bottom: var(--hairline) solid var(--line); }

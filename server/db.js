@@ -1,8 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { applyOp, normalizeGame } from "../public/js/reducer.js";
-import { freshGame, rankPlayers } from "../public/js/rules.js";
+import { applyOp, freshGame, normalizeGame } from "../public/js/core/reducer.js";
+import { rankPlayers } from "../public/js/core/score.js";
+import { getDef } from "../public/js/games/index.js";
 
 export function openDb(file) {
   if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
@@ -24,11 +25,17 @@ export function openDb(file) {
       added_at INTEGER NOT NULL
     );
   `);
+  // Sessions made before there was more than one game are It's a Wonderful World.
+  if (!db.prepare("PRAGMA table_info(games)").all().some((c) => c.name === "kind")) {
+    db.exec("ALTER TABLE games ADD COLUMN kind TEXT NOT NULL DEFAULT 'iaww'");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS games_kind ON games (kind, updated_at)");
 
   const q = {
     get: db.prepare("SELECT * FROM games WHERE id = ?"),
-    list: db.prepare("SELECT id, state, created_at, updated_at, finished_at, result FROM games ORDER BY updated_at DESC LIMIT ?"),
-    insert: db.prepare("INSERT INTO games (state, created_at, updated_at) VALUES (?, ?, ?)"),
+    list: db.prepare("SELECT id, kind, state, created_at, updated_at, finished_at, result FROM games ORDER BY updated_at DESC LIMIT ?"),
+    listKind: db.prepare("SELECT id, kind, state, created_at, updated_at, finished_at, result FROM games WHERE kind = ? ORDER BY updated_at DESC LIMIT ?"),
+    insert: db.prepare("INSERT INTO games (kind, state, created_at, updated_at) VALUES (?, ?, ?, ?)"),
     save: db.prepare("UPDATE games SET state = ?, version = version + 1, updated_at = ? WHERE id = ?"),
     finish: db.prepare("UPDATE games SET finished_at = ?, result = ?, updated_at = ? WHERE id = ?"),
     del: db.prepare("DELETE FROM games WHERE id = ?"),
@@ -37,40 +44,49 @@ export function openDb(file) {
     rosterDel: db.prepare("DELETE FROM roster WHERE name = ?"),
   };
 
-  const row = (r) =>
-    r && {
+  // A session whose game has no scoring definition any more is left out.
+  const row = (r) => {
+    const def = r && getDef(r.kind);
+    if (!def || !def.score) return null;
+    return {
       id: r.id,
+      kind: r.kind,
+      def,
       version: r.version,
-      state: normalizeGame(JSON.parse(r.state)),
+      state: normalizeGame(JSON.parse(r.state), def),
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       finishedAt: r.finished_at,
       result: r.result ? JSON.parse(r.result) : null,
     };
+  };
+  const summary = (r) => {
+    const s = JSON.parse(r.state);
+    return {
+      id: r.id,
+      kind: r.kind,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      finishedAt: r.finished_at,
+      players: (s.players || []).map((p) => p.name),
+      result: r.result ? JSON.parse(r.result) : null,
+    };
+  };
 
   return {
     close: () => db.close(),
     getGame: (id) => row(q.get.get(id)),
 
-    listGames(limit = 50) {
-      return q.list.all(limit).map((r) => {
-        const s = JSON.parse(r.state);
-        return {
-          id: r.id,
-          createdAt: r.created_at,
-          updatedAt: r.updated_at,
-          finishedAt: r.finished_at,
-          players: (s.players || []).map((p) => p.name),
-          result: r.result ? JSON.parse(r.result) : null,
-        };
-      });
-    },
+    listGames: (kind, limit = 50) => (kind ? q.listKind.all(kind, limit) : q.list.all(limit)).map(summary),
 
-    createGame(fromId) {
+    /** Starts a session of `kind`, carrying players and options over from `fromId` when it is the same game. */
+    createGame(kind, fromId) {
+      const def = getDef(kind);
+      if (!def || !def.score) return null;
       const from = fromId ? row(q.get.get(fromId)) : null;
-      const state = normalizeGame(freshGame(from && from.state));
+      const state = normalizeGame(freshGame(def, from && from.kind === kind ? from.state : null), def);
       const now = Date.now();
-      const { lastInsertRowid } = q.insert.run(JSON.stringify(state), now, now);
+      const { lastInsertRowid } = q.insert.run(kind, JSON.stringify(state), now, now);
       return row(q.get.get(Number(lastInsertRowid)));
     },
 
@@ -82,7 +98,7 @@ export function openDb(file) {
           db.exec("ROLLBACK");
           return null;
         }
-        for (const op of ops) applyOp(g.state, op);
+        for (const op of ops) applyOp(g.state, op, g.def);
         q.save.run(JSON.stringify(g.state), Date.now(), id);
         db.exec("COMMIT");
         return row(q.get.get(id));
@@ -92,11 +108,11 @@ export function openDb(file) {
       }
     },
 
-    // Saves the ranked result and remembers each named player for next time.
+    // Saves the ranked result and remembers each named player for next time, in any game.
     finishGame(id) {
       const g = row(q.get.get(id));
       if (!g) return null;
-      const result = rankPlayers(g.state).map((r) => ({ n: r.p.name.trim() || "Unnamed", t: r.t, rank: r.rank }));
+      const result = rankPlayers(g.state, g.def).map((r) => ({ n: r.p.name.trim() || "Unnamed", t: r.t, rank: r.rank }));
       const now = Date.now();
       q.finish.run(now, JSON.stringify(result), now, id);
       for (const p of g.state.players) {

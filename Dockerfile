@@ -6,7 +6,7 @@ ENV NODE_ENV=production \
     APP_VERSION=$APP_VERSION \
     PORT=3000 \
     HOST=0.0.0.0 \
-    DB_FILE=/data/iaww.sqlite \
+    DB_FILE=/data/tabletop.sqlite \
     NODE_NO_WARNINGS=1
 WORKDIR /app
 COPY package.json ./

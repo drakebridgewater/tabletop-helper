@@ -1,16 +1,16 @@
-# Wonderful World scores on Unraid, behind Traefik and Authelia.
-# https://iaww.bridgewater.digital
+# Tabletop on Unraid, behind Traefik and Authelia.
+# https://tabletop.bridgewater.digital
 #
 # Point a Dockhand Git stack at this file. GitHub Actions builds the image and
 # publishes it to GHCR, so nothing is compiled on the server. Set the variables
 # from deploy/.env.example before the first deploy.
 
-name: iaww
+name: tabletop
 
 services:
-  iaww:
-    container_name: iaww
-    image: ghcr.io/${GITHUB_OWNER:-drakebridgewater}/wonderful-world-scores:${IMAGE_TAG:-latest}
+  tabletop:
+    container_name: tabletop
+    image: ghcr.io/${GITHUB_OWNER:-drakebridgewater}/tabletop-helper:${IMAGE_TAG:-latest}
     restart: unless-stopped
     user: "${PUID:-99}:${PGID:-100}"   # Unraid nobody:users
     environment:
@@ -19,28 +19,28 @@ services:
       # Set to false if this container is ever reachable without Authelia in front.
       TRUST_USER_HEADER: ${TRUST_USER_HEADER:-true}
     volumes:
-      - ${APPDATA:-/mnt/user/appdata/iaww}:/data   # iaww.sqlite: games and saved players
+      - ${APPDATA:-/mnt/user/appdata/tabletop}:/data   # tabletop.sqlite: sessions and saved players
     networks:
       - proxy
     labels:
       traefik.enable: "true"
       traefik.docker.network: ${TRAEFIK_NETWORK:-proxy}
-      traefik.http.services.iaww.loadbalancer.server.port: "3000"
-      traefik.http.routers.iaww.rule: Host(`${SITE_HOST:-iaww.bridgewater.digital}`)
-      traefik.http.routers.iaww.entrypoints: ${TRAEFIK_ENTRYPOINT:-https}
-      traefik.http.routers.iaww.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-cloudflare}
-      traefik.http.routers.iaww.middlewares: ${AUTHELIA_MIDDLEWARE:-default-secure@file}
-      traefik.http.routers.iaww.service: iaww
+      traefik.http.services.tabletop.loadbalancer.server.port: "3000"
+      traefik.http.routers.tabletop.rule: Host(`${SITE_HOST:-tabletop.bridgewater.digital}`)
+      traefik.http.routers.tabletop.entrypoints: ${TRAEFIK_ENTRYPOINT:-https}
+      traefik.http.routers.tabletop.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-cloudflare}
+      traefik.http.routers.tabletop.middlewares: ${AUTHELIA_MIDDLEWARE:-default-secure@file}
+      traefik.http.routers.tabletop.service: tabletop
 
       homepage.group: ${HOMEPAGE_GROUP:-Family}
-      homepage.name: Wonderful World scores
-      homepage.icon: mdi-earth
-      homepage.href: https://${SITE_HOST:-iaww.bridgewater.digital}
-      homepage.description: It's a Wonderful World tracker and score pad
-      homepage.siteMonitor: http://iaww:3000/healthz
+      homepage.name: Tabletop
+      homepage.icon: mdi-dice-multiple
+      homepage.href: https://${SITE_HOST:-tabletop.bridgewater.digital}
+      homepage.description: Board game guides, score pads and trackers
+      homepage.siteMonitor: http://tabletop:3000/healthz
 
       net.unraid.docker.managed: composeman
-      net.unraid.docker.webui: https://${SITE_HOST:-iaww.bridgewater.digital}
+      net.unraid.docker.webui: https://${SITE_HOST:-tabletop.bridgewater.digital}
 
 networks:
   proxy:

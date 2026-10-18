@@ -1,15 +1,17 @@
 {
-  "name": "wonderful-world-scores",
+  "name": "tabletop-helper",
   "version": "1.0.0",
   "private": true,
-  "description": "Production tracker and score pad for It's a Wonderful World, synced across devices.",
+  "description": "Board game guides, score pads and trackers, synced across devices. tabletop.bridgewater.digital",
   "type": "module",
-  "engines": { "node": ">=22.13" },
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "test": "node --test test/",
-    "check": "node --check server/index.js && node --check server/db.js && for f in public/js/*.js public/sw.js; do node --check \"$f\" || exit 1; done",
+    "check": "for f in server/*.js public/sw.js $(find public/js -name '*.js'); do node --check \"$f\" || exit 1; done",
     "sync-brand": "sh scripts/sync-brand.sh"
   }
 }

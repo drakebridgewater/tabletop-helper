@@ -1,7 +1,7 @@
 {
-  "name": "Wonderful World scores",
-  "short_name": "IAWW scores",
-  "description": "Production tracker and score pad for It's a Wonderful World.",
+  "name": "Tabletop",
+  "short_name": "Tabletop",
+  "description": "Board game guides, score pads and trackers.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

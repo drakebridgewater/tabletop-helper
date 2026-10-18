@@ -1,4 +1,4 @@
-// One game on this device: the last state the server confirmed, plus the ops
+// One session on this device: the last state the server confirmed, plus the ops
 // made here that the server has not confirmed yet. What you see is the two
 // combined, so the app keeps working offline and catches up when it can.
 
@@ -46,12 +46,13 @@ export async function api(path, { method = "GET", body } = {}) {
 }
 
 export class GameStore {
-  constructor(id, onChange, onStatus) {
+  constructor(id, def, onChange, onStatus) {
     this.id = id;
+    this.def = def;
     this.onChange = onChange;
     this.onStatus = onStatus;
-    this.base = local.get(`iaww:game:${id}`);
-    this.pending = local.get(`iaww:pending:${id}`) || [];
+    this.base = local.get(`tabletop:game:${id}`);
+    this.pending = local.get(`tabletop:pending:${id}`) || [];
     this.busy = false;
     this.status = "saving";
     this.recompute();
@@ -59,8 +60,8 @@ export class GameStore {
 
   recompute() {
     if (!this.base) return (this.state = null);
-    const s = normalizeGame(structuredClone(this.base.state));
-    for (const op of this.pending) applyOp(s, op);
+    const s = normalizeGame(structuredClone(this.base.state), this.def);
+    for (const op of this.pending) applyOp(s, op, this.def);
     this.state = s;
   }
 
@@ -84,12 +85,12 @@ export class GameStore {
   adopt(g) {
     if (this.base && g.version < this.base.version) return;
     this.base = g;
-    local.set(`iaww:game:${this.id}`, g);
+    local.set(`tabletop:game:${this.id}`, g);
     // Ops the server already applied drop out of the queue.
     const seen = new Set(g.state._ops || []);
     const before = this.pending.length;
     this.pending = this.pending.filter((op) => !seen.has(op.opId));
-    if (this.pending.length !== before) local.set(`iaww:pending:${this.id}`, this.pending);
+    if (this.pending.length !== before) local.set(`tabletop:pending:${this.id}`, this.pending);
     this.recompute();
     this.onChange();
   }
@@ -107,7 +108,7 @@ export class GameStore {
   dispatch(op) {
     op.opId = uid();
     this.pending.push(op);
-    local.set(`iaww:pending:${this.id}`, this.pending);
+    local.set(`tabletop:pending:${this.id}`, this.pending);
     this.recompute();
     this.onChange();
     clearTimeout(this.timer);

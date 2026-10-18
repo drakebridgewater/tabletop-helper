@@ -1,9 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { freshGame } from "../public/js/rules.js";
-import { applyOp, normalizeGame } from "../public/js/reducer.js";
+import { applyOp as apply, freshGame, normalizeGame } from "../public/js/core/reducer.js";
+import def from "../public/js/games/iaww/def.js";
 
-const game = () => normalizeGame(freshGame());
+const applyOp = (g, op) => apply(g, op, def);
+const game = () => normalizeGame(freshGame(def), def);
 
 test("every op is idempotent", () => {
   const ops = [

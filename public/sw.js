@@ -1,8 +1,9 @@
 // Network first, cache as the fallback: online you always get the latest
 // build, offline the last one you loaded still opens. The API is never cached;
 // games keep their own copy on the device (see js/store.js).
-const CACHE = "iaww-shell-v1";
-const SHELL = ["/", "/app.css", "/brand/bridgewater.css", "/brand/bundle.js", "/js/theme-init.js", "/js/app.js", "/js/store.js", "/js/rules.js", "/js/reducer.js", "/js/guide.js"];
+const CACHE = "tabletop-shell-v2";
+// The shell is cached up front; game files are cached the first time they load.
+const SHELL = ["/", "/app.css", "/brand/bridgewater.css", "/brand/bundle.js", "/js/theme-init.js", "/js/app.js"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

@@ -25,7 +25,7 @@ const call = async (path, { method = "GET", body, headers = {} } = {}) => {
 };
 
 test("a game goes from created to saved, and named players join the roster", async () => {
-  const created = await call("/api/games", { method: "POST", body: {} });
+  const created = await call("/api/games", { method: "POST", body: { kind: "iaww" } });
   assert.equal(created.status, 201);
   const id = created.body.id;
 
@@ -44,16 +44,28 @@ test("a game goes from created to saved, and named players join the roster", asy
   assert.equal(fin.body.result[0].t, 12);
   assert.deepEqual((await call("/api/roster")).body, ["Ana"]);
 
-  const next = await call("/api/games", { method: "POST", body: { from: id } });
+  const next = await call("/api/games", { method: "POST", body: { kind: "iaww", from: id } });
   assert.equal(next.body.state.players[0].name, "Ana");
   assert.deepEqual(next.body.state.players[0].s, {});
 
-  const list = await call("/api/games");
+  const list = await call("/api/games?kind=iaww");
   assert.equal(list.body.length, 2);
+  assert.equal(list.body[0].kind, "iaww");
+
+  // Players carry over only within the same game.
+  const other = await call("/api/games", { method: "POST", body: { kind: "wingspan", from: id } });
+  assert.equal(other.body.state.players[0].name, "Player 1");
+  assert.equal(other.body.kind, "wingspan");
+});
+
+test("sessions only exist for games with a score pad", async () => {
+  assert.equal((await call("/api/games", { method: "POST", body: { kind: "codenames" } })).status, 400);
+  assert.equal((await call("/api/games", { method: "POST", body: { kind: "nope" } })).status, 400);
+  assert.equal((await call("/api/games", { method: "POST", body: {} })).status, 400);
 });
 
 test("the live stream sends the current state, then each change", async () => {
-  const { body: g } = await call("/api/games", { method: "POST", body: {} });
+  const { body: g } = await call("/api/games", { method: "POST", body: { kind: "wingspan" } });
   const ctrl = new AbortController();
   const res = await fetch(`${base}/api/games/${g.id}/stream`, { signal: ctrl.signal });
   const reader = res.body.getReader();
@@ -78,7 +90,7 @@ test("errors and the app shell", async () => {
   assert.equal((await call("/api/games/999")).status, 404);
   assert.equal((await call("/api/games/abc")).status, 404);
   assert.equal((await call("/api/games/1/ops", { method: "POST", body: { ops: "x" } })).status, 400);
-  const shell = await call("/games/5/score");
+  const shell = await call("/wingspan/5/score");
   assert.equal(shell.status, 200);
   assert.match(shell.res.headers.get("content-security-policy"), /default-src 'self'/);
   assert.equal((await call("/missing.js")).status, 404);

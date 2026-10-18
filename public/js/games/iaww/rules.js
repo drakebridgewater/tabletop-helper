@@ -1,5 +1,5 @@
-// Game rules and scoring for It's a Wonderful World. Pure functions, shared by
-// the browser and the server (the server ranks players when a game is saved).
+// It's a Wonderful World: game data and the tracker maths. Pure functions,
+// shared by the browser and the server.
 
 export const EXPANSIONS = [
   { id: "ca", name: "Corruption & Ascension", note: "Duo scoring, corruption, up to 7 players" },
@@ -62,14 +62,6 @@ export const resLabel = (k) => (RES.find((r) => r.k === k) || {}).label || k;
 export const typeLabel = (k) => (k === "empire" ? "Empire card" : (TYPES.find((t) => t.k === k) || {}).label || k);
 export const targetLabel = (k) => (TOK[k] ? TOK[k].label : typeLabel(k));
 
-export const maxPlayers = (game) => (game.exp.ca ? 7 : 5);
-export const groupOn = (game, g) => g === "base" || g === "other" || !!game.exp[g];
-export const activeCats = (game) => CATS.filter((c) => groupOn(game, c.g));
-export const playerName = (game, id) => {
-  const p = game.players.find((x) => x.id === id);
-  return p ? p.name.trim() || "Unnamed" : "Removed player";
-};
-
 /* ---------- tracker maths (derived from the event log) ---------- */
 export function stats(game, p) {
   const ev = game.log.filter((e) => e.player === p.id);
@@ -130,37 +122,6 @@ export function leaderOf(statsList, res) {
   return { best, who };
 }
 
-/* ---------- score pad maths ---------- */
-export function catValue(p, c) {
-  const v = p.s[c.k];
-  if (v == null) return 0;
-  if (c.kind === "mult") return (v.n || 0) * (v.x || 0);
-  if (c.kind === "signed") return (v.neg ? -1 : 1) * (v.v || 0);
-  return v.v || 0;
-}
-export const total = (game, p) => activeCats(game).reduce((a, c) => a + catValue(p, c), 0);
-
-// Highest total first; ties break on cards built, then character tokens.
-export function rankPlayers(game) {
-  const rows = game.players.map((p) => {
-    const s = stats(game, p);
-    return { p, t: total(game, p), b: s.built, k: s.tok.fin + s.tok.gen };
-  });
-  rows.sort((a, b) => b.t - a.t || b.b - a.b || b.k - a.k);
-  let rank = 0;
-  let prev = null;
-  rows.forEach((r, i) => {
-    const key = `${r.t}|${r.b}|${r.k}`;
-    if (key !== prev) {
-      rank = i + 1;
-      prev = key;
-    }
-    r.rank = rank;
-    r.tied = rows.filter((o) => `${o.t}|${o.b}|${o.k}` === key).length > 1;
-  });
-  return rows;
-}
-
 // Copies the tracker's derived totals into each tracked player's score pad rows.
 export function fillScorePad(game) {
   game.players.forEach((p) => {
@@ -201,23 +162,4 @@ export function cardSummary(c) {
   const bb = [b.fin && `${b.fin} Fin`, b.gen && `${b.gen} Gen`, b.kry && `${b.kry} Kryst`].filter(Boolean);
   if (bb.length) bits.push("bonus " + bb.join(", "));
   return bits.join(" · ") || "No production or VP";
-}
-
-export function freshGame(from) {
-  const players = from && from.players.length
-    ? from.players.map((p) => ({ id: p.id, name: p.name, s: {} }))
-    : [
-        { id: "p1", name: "Player 1", s: {} },
-        { id: "p2", name: "Player 2", s: {} },
-      ];
-  return {
-    exp: Object.assign({ ca: false, wop: false, ld: false, rote: false }, from ? from.exp : {}),
-    tokPref: Object.assign(
-      { material: "fin", energy: "gen", science: "gen", gold: "fin", exploration: "gen" },
-      from ? from.tokPref : {},
-    ),
-    players,
-    log: [],
-    round: 1,
-  };
 }

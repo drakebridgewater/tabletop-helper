@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { freshGame, rankPlayers, stats, total, fillScorePad } from "../public/js/rules.js";
-import { applyOp, normalizeGame } from "../public/js/reducer.js";
+import { stats, fillScorePad } from "../public/js/games/iaww/rules.js";
+import { applyOp as apply, freshGame, normalizeGame } from "../public/js/core/reducer.js";
+import { rankPlayers, total as sum } from "../public/js/core/score.js";
+import def from "../public/js/games/iaww/def.js";
+
+const applyOp = (g, op) => apply(g, op, def);
+const total = (g, p) => sum(g, def, p);
 
 const build = (player, card, id = Math.random().toString(36).slice(2)) => ({
   type: "log",
@@ -9,7 +14,7 @@ const build = (player, card, id = Math.random().toString(36).slice(2)) => ({
 });
 
 function game() {
-  return normalizeGame(freshGame());
+  return normalizeGame(freshGame(def), def);
 }
 
 test("production adds card output, scaling and corruption, never below zero", () => {
@@ -51,7 +56,7 @@ test("ranking breaks ties on cards built, then tokens", () => {
   applyOp(g, { type: "setCat", player: "p1", key: "cards", value: { v: 10 } });
   applyOp(g, { type: "setCat", player: "p2", key: "cards", value: { v: 10 } });
   applyOp(g, build("p2", { type: "structure" }));
-  const r = rankPlayers(g);
+  const r = rankPlayers(g, def);
   assert.equal(r[0].p.id, "p2");
   assert.equal(r[0].rank, 1);
   assert.equal(r[1].rank, 2);

@@ -62,7 +62,7 @@ async function readJson(req) {
   }
 }
 
-const publicGame = (g) => ({ id: g.id, version: g.version, state: g.state, finishedAt: g.finishedAt, result: g.result });
+const publicGame = (g) => ({ id: g.id, kind: g.kind, version: g.version, state: g.state, finishedAt: g.finishedAt, result: g.result });
 
 export function createApp({ dbFile = ":memory:", trustUserHeader = true, version = "dev" } = {}) {
   const db = openDb(dbFile);
@@ -90,11 +90,13 @@ export function createApp({ dbFile = ":memory:", trustUserHeader = true, version
       return send(res, 200, { user, version });
     }
     if (parts[0] === "games" && parts.length === 1) {
-      if (m === "GET") return send(res, 200, db.listGames());
+      if (m === "GET") return send(res, 200, db.listGames(url.searchParams.get("kind")));
       if (m === "POST") {
         const body = await readJson(req);
         const from = Number.isInteger(body.from) ? body.from : null;
-        return send(res, 201, publicGame(db.createGame(from)));
+        const g = db.createGame(String(body.kind || ""), from);
+        if (!g) throw new HttpError(400, "That game has no score pad");
+        return send(res, 201, publicGame(g));
       }
     }
     if (gameId !== null && parts.length === 2) {
@@ -203,11 +205,11 @@ export function createApp({ dbFile = ":memory:", trustUserHeader = true, version
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT || 3000);
   const { server } = createApp({
-    dbFile: process.env.DB_FILE || "./data/iaww.sqlite",
+    dbFile: process.env.DB_FILE || "./data/tabletop.sqlite",
     trustUserHeader: process.env.TRUST_USER_HEADER !== "false",
     version: process.env.APP_VERSION || "dev",
   });
-  server.listen(port, process.env.HOST || "0.0.0.0", () => console.log(`iaww listening on :${port}`));
+  server.listen(port, process.env.HOST || "0.0.0.0", () => console.log(`tabletop listening on :${port}`));
   const stop = () => {
     server.close(() => process.exit(0));
     server.closeAllConnections(); // open live-update streams would otherwise hold the close
