@@ -26,7 +26,9 @@ export function sanitizeCard(c) {
   const scale = c.scale || {};
   const combo = c.combo || {};
   const duo = c.duo || {};
+  const name = typeof c.name === "string" ? c.name.trim().slice(0, 40) : "";
   return {
+    ...(name ? { name } : {}),
     type: c.type === "empire" || TYPE_KEYS.includes(c.type) ? c.type : "structure",
     cost: numMap(c.cost, RES_KEYS.concat(["kry", "fin", "gen"])),
     prod: numMap(c.prod, RES_KEYS),
@@ -44,6 +46,8 @@ function sanitizeEvent(e, game) {
   const base = { id: id(e.id), t: int(e.t, 0, Number.MAX_SAFE_INTEGER), round: int(e.round, 1, 4) || 1, player: id(e.player) };
   if (!base.id || !game.players.some((p) => p.id === base.player)) return null;
   if (e.kind === "build") return { ...base, kind: "build", card: sanitizeCard(e.card) };
+  // A drafted card recycled for its bonus cube. It changes no totals; the log keeps it.
+  if (e.kind === "recycle" && RES_KEYS.includes(e.res)) return { ...base, kind: "recycle", res: e.res, card: sanitizeCard(e.card) };
   if (e.kind === "award" && RES_KEYS.includes(e.res) && (e.token === "fin" || e.token === "gen"))
     return { ...base, kind: "award", res: e.res, token: e.token };
   if (e.kind === "adj" && (e.token === "fin" || e.token === "gen")) return { ...base, kind: "adj", token: e.token, n: e.n < 0 ? -1 : 1 };
