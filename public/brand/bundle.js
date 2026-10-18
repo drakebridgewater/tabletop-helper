@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Bridgewater","components":[{"name":"Mark"},{"name":"Wordmark"},{"name":"Strip"},{"name":"Prompt"},{"name":"Header"},{"name":"Button"},{"name":"Status"},{"name":"Count"},{"name":"Field"},{"name":"Panel"},{"name":"Rows"},{"name":"AppTile"},{"name":"Icon"},{"name":"ThemeToggle"},{"name":"Skyline"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Bridgewater","components":[{"name":"Mark"},{"name":"Wordmark"},{"name":"Strip"},{"name":"Prompt"},{"name":"Whoami"},{"name":"Header"},{"name":"Button"},{"name":"Status"},{"name":"Count"},{"name":"Field"},{"name":"Panel"},{"name":"Rows"},{"name":"AppTile"},{"name":"Icon"},{"name":"ThemeToggle"},{"name":"Skyline"}]} */
 (function (root) {
   "use strict";
   var doc = root.document;
@@ -120,7 +120,8 @@
   function Prompt(p) {
     p = p || {};
     var nav = h("nav", { "class": "bw-prompt", "aria-label": "You are here" });
-    nav.appendChild(h("span", { "class": "bw-prompt__user" }, p.user || "you"));
+    var user = nav.appendChild(h("span", { "class": "bw-prompt__user" }, p.auth ? "…" : (p.user || "you")));
+    if (p.auth) whoami(p.auth).then(function (r) { user.textContent = r.user; });
     nav.appendChild(h("span", { "class": "bw-prompt__sep" }, "@"));
     nav.appendChild(h("span", { "class": "bw-prompt__host" }, p.host || "omega"));
     nav.appendChild(h("span", { "class": "bw-prompt__sep" }, ":"));
@@ -132,6 +133,61 @@
       else nav.appendChild(h("span", { "class": "bw-prompt__seg", "aria-current": last ? "page" : null }, seg.label));
     }
     return nav;
+  }
+
+  /* ---------- whoami: the signed-in user ---------- */
+  var ANON = "nobody", OUT = "you", seen = {};
+  function userFrom(o) {
+    if (!o || typeof o !== "object") return null;
+    if (o.isLoggedIn === false || o.authenticated === false) return false;
+    var c = [o, o.data, o.user].filter(function (x) { return x && typeof x === "object"; });
+    var keys = ["preferred_username", "preferredUsername", "username", "user", "login", "sub"];
+    for (var i = 0; i < c.length; i++) for (var k = 0; k < keys.length; k++) {
+      var v = c[i][keys[k]];
+      if (typeof v === "string" && v && !/^[0-9a-f-]{20,}$/i.test(v)) return v;
+    }
+    for (i = 0; i < c.length; i++) {
+      var mail = c[i].email || (c[i].emails && c[i].emails[0]);
+      if (typeof mail === "string" && mail.indexOf("@") > 0) return mail.split("@")[0];
+      var name = c[i].display_name || c[i].name;
+      if (typeof name === "string" && name) return name.split(/\s+/)[0].toLowerCase();
+    }
+    return null;
+  }
+  /* Resolves { state: 'signed-in' | 'signed-out' | 'unknown', user }. One request per source per page. */
+  function whoami(p) {
+    p = p || {};
+    if (p.user) return Promise.resolve({ state: "signed-in", user: p.user });
+    if (!p.source || !root.fetch) return Promise.resolve({ state: "unknown", user: ANON });
+    if (seen[p.source]) return seen[p.source];
+    var pick = p.pick || userFrom;
+    return (seen[p.source] = root.fetch(p.source, { credentials: "include", redirect: "manual", headers: { Accept: "application/json" } })
+      .then(function (res) {
+        if (res.type === "opaqueredirect" || res.status === 401 || res.status === 403) return { state: "signed-out", user: OUT };
+        if (!res.ok) return { state: "unknown", user: ANON };
+        return res.json().then(function (body) {
+          var u = pick(body);
+          if (u === false) return { state: "signed-out", user: OUT };
+          return u ? { state: "signed-in", user: String(u) } : { state: "unknown", user: ANON };
+        });
+      })
+      .catch(function () { return { state: "unknown", user: ANON }; }));
+  }
+  function Whoami(p) {
+    p = p || {};
+    var el = h("span", { "class": "bw-whoami", "data-state": "checking", "aria-live": "polite" });
+    var user = el.appendChild(h("span", { "class": "bw-whoami__user" }, "…"));
+    el.appendChild(h("span", { "class": "bw-whoami__sep" }, "@"));
+    el.appendChild(h("span", { "class": "bw-whoami__host" }, p.host || "omega"));
+    whoami(p).then(function (r) {
+      el.setAttribute("data-state", r.state);
+      user.textContent = r.user;
+      el.setAttribute("title", r.state === "signed-in" ? "Signed in as " + r.user : r.state === "signed-out" ? "Signed out" : "This site has no sign-in");
+      if (r.state === "signed-out" && p.signIn) el.appendChild(h("a", { "class": "bw-whoami__action", href: p.signIn }, "Sign in"));
+      if (r.state === "signed-in" && p.signOut) el.appendChild(h("a", { "class": "bw-whoami__action", href: p.signOut }, "Sign out"));
+      if (p.onResolve) p.onResolve(r);
+    });
+    return el;
   }
 
   /* ---------- Button ---------- */
@@ -290,7 +346,7 @@
     if (p.themeToggle !== false) bar.appendChild(ThemeToggle());
     head.appendChild(bar);
     head.appendChild(h("div", { "class": "bw-header__rule" }));
-    head.appendChild(h("div", { "class": "bw-container bw-header__where" }, Prompt({ user: p.user, host: p.host, path: p.path })));
+    head.appendChild(h("div", { "class": "bw-container bw-header__where" }, Prompt({ user: p.user, auth: p.auth, host: p.host, path: p.path })));
     return head;
   }
 
@@ -328,9 +384,9 @@
   root.Bridgewater = {
     version: "1.0.0",
     icons: Object.keys(D.icons),
-    Mark: Mark, Wordmark: Wordmark, Strip: Strip, Prompt: Prompt, Header: Header,
+    Mark: Mark, Wordmark: Wordmark, Strip: Strip, Prompt: Prompt, Whoami: Whoami, Header: Header,
     Button: Button, Status: Status, Count: Count, Field: Field, Panel: Panel, Rows: Rows,
     AppTile: AppTile, Icon: Icon, ThemeToggle: ThemeToggle, Skyline: Skyline,
-    theme: theme, init: init, mount: mount
+    theme: theme, whoami: whoami, init: init, mount: mount
   };
 })(typeof window !== "undefined" ? window : this);

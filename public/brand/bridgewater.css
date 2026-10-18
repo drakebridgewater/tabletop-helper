@@ -199,6 +199,15 @@ img { max-width: 100%; }
 .bw-prompt a.bw-prompt__seg { text-decoration: none; }
 .bw-prompt a.bw-prompt__seg:hover { text-decoration: underline; text-decoration-thickness: var(--hairline); text-underline-offset: 3px; }
 
+/* ---------- whoami ---------- */
+.bw-whoami { display: inline-flex; align-items: center; gap: 0; font: 500 14px/22px var(--font-mono); color: var(--comment); white-space: nowrap; }
+.bw-whoami::before { content: ""; width: var(--space-2); height: var(--space-2); margin-right: var(--space-2); border-radius: 50%; background: var(--comment); flex: none; }
+.bw-whoami[data-state="signed-in"]::before { background: var(--green); }
+.bw-whoami[data-state="unknown"]::before, .bw-whoami[data-state="checking"]::before { background: none; box-shadow: inset 0 0 0 var(--hairline) var(--comment); }
+.bw-whoami[data-state="signed-in"] .bw-whoami__user { color: var(--ink); }
+.bw-whoami__action { margin-left: var(--space-3); color: var(--sig); text-decoration: none; }
+.bw-whoami__action:hover { text-decoration: underline; text-decoration-thickness: var(--hairline); text-underline-offset: 3px; }
+
 /* ---------- header: strip, wordmark, ink rule, prompt ---------- */
 .bw-header__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding-top: var(--space-4); padding-bottom: var(--space-4); }
 .bw-header__rule { height: var(--rule); background: var(--ink); }

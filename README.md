@@ -89,7 +89,7 @@ API: `GET /api/games[?kind=<slug>]`, `POST /api/games {kind, from?}`, `GET/DELET
 
 Pushing to `main` runs the checks, publishes `ghcr.io/drakebridgewater/tabletop-helper:latest` and, if the `DOCKHAND_WEBHOOK_URL` secret is set, asks Dockhand to redeploy. `deploy/docker-compose.yml` runs it on Unraid behind Traefik, with the Authelia middleware on the whole host; the variables are in `deploy/.env.example`. Data lives in `${APPDATA}/tabletop.sqlite`; back up that folder.
 
-The server reads the signed-in user from Authelia's `Remote-User` header for the prompt line. Set `TRUST_USER_HEADER=false` if the container is ever reachable without Authelia in front.
+The server reads the signed-in user from Authelia's `Remote-User` header for the prompt line, which shows `nobody` when the header is missing. Set `TRUST_USER_HEADER=false` if the container is ever reachable without Authelia in front.
 
 ## Brand
 

@@ -11,7 +11,7 @@ import { CATALOG, TIER_LABEL, getDef, getEntry, scoreable, tier } from "./games/
 const B = window.Bridgewater;
 B.init({ sig: "teal" });
 
-const app = { me: null, store: null, sessionId: null, def: null, mod: null, route: { view: "library" }, sessions: null, recent: null, roster: [], showAll: false };
+const app = { store: null, sessionId: null, def: null, mod: null, route: { view: "library" }, sessions: null, recent: null, roster: [], showAll: false };
 // Per-device view state for the open session. Kept as one object so game screens can hold on to it.
 const ui = { active: null, draft: null, sheet: null, pad: null, pick: null };
 
@@ -52,7 +52,7 @@ function renderPrompt() {
   if (r.slug) path.push({ label: r.slug, href: `/${r.slug}` });
   if (r.view === "guide") path.push({ label: "guide", href: `/${r.slug}/guide` }, r.sub === "order" ? "play-order" : "getting-started");
   if (r.id) path.push({ label: String(r.id), href: sessionHome(app.def, r.id) }, VIEW_PATH[r.view]);
-  promptSlot.replaceChildren(B.Prompt({ user: app.me || "you", path }));
+  promptSlot.replaceChildren(B.Prompt({ auth: { source: "/api/me" }, path }));
 }
 function renderNav() {
   const r = app.route;
@@ -594,11 +594,5 @@ window.addEventListener("popstate", route);
 window.addEventListener("online", () => app.store && app.store.flush());
 
 buildHeader();
-api("/api/me")
-  .then((m) => {
-    app.me = m.user;
-    renderPrompt();
-  })
-  .catch(() => {});
 route();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
