@@ -1,0 +1,48 @@
+# Wonderful World scores on Unraid, behind Traefik and Authelia.
+# https://iaww.bridgewater.digital
+#
+# Point a Dockhand Git stack at this file. GitHub Actions builds the image and
+# publishes it to GHCR, so nothing is compiled on the server. Set the variables
+# from deploy/.env.example before the first deploy.
+
+name: iaww
+
+services:
+  iaww:
+    container_name: iaww
+    image: ghcr.io/${GITHUB_OWNER:-drakebridgewater}/wonderful-world-scores:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    user: "${PUID:-99}:${PGID:-100}"   # Unraid nobody:users
+    environment:
+      TZ: ${TZ:-America/Los_Angeles}
+      # The prompt line shows the Authelia user from the Remote-User header.
+      # Set to false if this container is ever reachable without Authelia in front.
+      TRUST_USER_HEADER: ${TRUST_USER_HEADER:-true}
+    volumes:
+      - ${APPDATA:-/mnt/user/appdata/iaww}:/data   # iaww.sqlite: games and saved players
+    networks:
+      - proxy
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-proxy}
+      traefik.http.services.iaww.loadbalancer.server.port: "3000"
+      traefik.http.routers.iaww.rule: Host(`${SITE_HOST:-iaww.bridgewater.digital}`)
+      traefik.http.routers.iaww.entrypoints: ${TRAEFIK_ENTRYPOINT:-https}
+      traefik.http.routers.iaww.tls.certresolver: ${TRAEFIK_CERTRESOLVER:-cloudflare}
+      traefik.http.routers.iaww.middlewares: ${AUTHELIA_MIDDLEWARE:-default-secure@file}
+      traefik.http.routers.iaww.service: iaww
+
+      homepage.group: ${HOMEPAGE_GROUP:-Family}
+      homepage.name: Wonderful World scores
+      homepage.icon: mdi-earth
+      homepage.href: https://${SITE_HOST:-iaww.bridgewater.digital}
+      homepage.description: It's a Wonderful World tracker and score pad
+      homepage.siteMonitor: http://iaww:3000/healthz
+
+      net.unraid.docker.managed: composeman
+      net.unraid.docker.webui: https://${SITE_HOST:-iaww.bridgewater.digital}
+
+networks:
+  proxy:
+    name: ${TRAEFIK_NETWORK:-proxy}
+    external: true

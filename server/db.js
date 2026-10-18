@@ -1,0 +1,113 @@
+import { DatabaseSync } from "node:sqlite";
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
+import { applyOp, normalizeGame } from "../public/js/reducer.js";
+import { freshGame, rankPlayers } from "../public/js/rules.js";
+
+export function openDb(file) {
+  if (file !== ":memory:") mkdirSync(dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA busy_timeout = 5000;
+    CREATE TABLE IF NOT EXISTS games (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      state TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      result TEXT
+    );
+    CREATE TABLE IF NOT EXISTS roster (
+      name TEXT PRIMARY KEY COLLATE NOCASE,
+      added_at INTEGER NOT NULL
+    );
+  `);
+
+  const q = {
+    get: db.prepare("SELECT * FROM games WHERE id = ?"),
+    list: db.prepare("SELECT id, state, created_at, updated_at, finished_at, result FROM games ORDER BY updated_at DESC LIMIT ?"),
+    insert: db.prepare("INSERT INTO games (state, created_at, updated_at) VALUES (?, ?, ?)"),
+    save: db.prepare("UPDATE games SET state = ?, version = version + 1, updated_at = ? WHERE id = ?"),
+    finish: db.prepare("UPDATE games SET finished_at = ?, result = ?, updated_at = ? WHERE id = ?"),
+    del: db.prepare("DELETE FROM games WHERE id = ?"),
+    roster: db.prepare("SELECT name FROM roster ORDER BY name COLLATE NOCASE"),
+    rosterAdd: db.prepare("INSERT OR IGNORE INTO roster (name, added_at) VALUES (?, ?)"),
+    rosterDel: db.prepare("DELETE FROM roster WHERE name = ?"),
+  };
+
+  const row = (r) =>
+    r && {
+      id: r.id,
+      version: r.version,
+      state: normalizeGame(JSON.parse(r.state)),
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      finishedAt: r.finished_at,
+      result: r.result ? JSON.parse(r.result) : null,
+    };
+
+  return {
+    close: () => db.close(),
+    getGame: (id) => row(q.get.get(id)),
+
+    listGames(limit = 50) {
+      return q.list.all(limit).map((r) => {
+        const s = JSON.parse(r.state);
+        return {
+          id: r.id,
+          createdAt: r.created_at,
+          updatedAt: r.updated_at,
+          finishedAt: r.finished_at,
+          players: (s.players || []).map((p) => p.name),
+          result: r.result ? JSON.parse(r.result) : null,
+        };
+      });
+    },
+
+    createGame(fromId) {
+      const from = fromId ? row(q.get.get(fromId)) : null;
+      const state = normalizeGame(freshGame(from && from.state));
+      const now = Date.now();
+      const { lastInsertRowid } = q.insert.run(JSON.stringify(state), now, now);
+      return row(q.get.get(Number(lastInsertRowid)));
+    },
+
+    applyOps(id, ops) {
+      db.exec("BEGIN IMMEDIATE");
+      try {
+        const g = row(q.get.get(id));
+        if (!g) {
+          db.exec("ROLLBACK");
+          return null;
+        }
+        for (const op of ops) applyOp(g.state, op);
+        q.save.run(JSON.stringify(g.state), Date.now(), id);
+        db.exec("COMMIT");
+        return row(q.get.get(id));
+      } catch (e) {
+        db.exec("ROLLBACK");
+        throw e;
+      }
+    },
+
+    // Saves the ranked result and remembers each named player for next time.
+    finishGame(id) {
+      const g = row(q.get.get(id));
+      if (!g) return null;
+      const result = rankPlayers(g.state).map((r) => ({ n: r.p.name.trim() || "Unnamed", t: r.t, rank: r.rank }));
+      const now = Date.now();
+      q.finish.run(now, JSON.stringify(result), now, id);
+      for (const p of g.state.players) {
+        const n = p.name.trim();
+        if (n && !/^Player \d+$/.test(n)) q.rosterAdd.run(n, now);
+      }
+      return row(q.get.get(id));
+    },
+
+    deleteGame: (id) => q.del.run(id).changes > 0,
+    roster: () => q.roster.all().map((r) => r.name),
+    removeFromRoster: (name) => q.rosterDel.run(name).changes > 0,
+  };
+}

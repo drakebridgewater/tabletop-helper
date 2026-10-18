@@ -1,0 +1,15 @@
+{
+  "name": "wonderful-world-scores",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production tracker and score pad for It's a Wonderful World, synced across devices.",
+  "type": "module",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test test/",
+    "check": "node --check server/index.js && node --check server/db.js && for f in public/js/*.js public/sw.js; do node --check \"$f\" || exit 1; done",
+    "sync-brand": "sh scripts/sync-brand.sh"
+  }
+}
