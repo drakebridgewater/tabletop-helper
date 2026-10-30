@@ -93,8 +93,7 @@ The server reads the signed-in user from Authelia's `Remote-User` header for the
 
 ## Brand
 
-Built on the Bridgewater system (`../bridgewater-brand`): the stylesheet, components, favicons and icons are copied into `public/` by `npm run sync-brand`. The signature is `teal`. Where this app bends a rule:
+Built on the Bridgewater system (`../bridgewater-brand`, v2.0.0): the stylesheet, components, self-hosted Fira fonts, favicons and icons are copied into `public/` by `npm run sync-brand`. The signature is `teal`. Where this app bends a rule:
 
 - **Game colors.** IAWW's resource chips and cubes use the game's own card colors (`--res-*` in `app.css`). They carry meaning, are fills only, and always sit next to a word or number.
 - **Section links at the bottom.** They are plain teal links as the brand asks, but placed at the bottom of the screen where a thumb reaches them, since the app is used one-handed at the table.
-- **Fonts** still load from Google Fonts. Self-host the Fira woff2 files before relying on it offline.
