@@ -24,7 +24,7 @@ function buildHeader() {
   const right = document.createElement("div");
   right.className = "hdr-right";
   right.append(B.ThemeToggle({ size: "sm" }));
-  bar.append(B.Wordmark({ href: "/", height: 24 }), right);
+  bar.append(B.Wordmark({ site: "tabletop" }), right);
   const rule = document.createElement("div");
   rule.className = "bw-header__rule";
   const where = document.createElement("div");
@@ -46,13 +46,13 @@ function renderStatus() {
 }
 const VIEW_PATH = { tracker: "tracker", score: "score-pad", setup: "setup" };
 const sessionHome = (def, id) => `/${def.slug}/${id}/${def.tracker ? "tracker" : "score"}`;
+// The brand reads the app and path off the URL; only a few segments get a friendlier label.
 function renderPrompt() {
   const r = app.route;
-  const path = [{ label: "~", href: "/" }];
-  if (r.slug) path.push({ label: r.slug, href: `/${r.slug}` });
-  if (r.view === "guide") path.push({ label: "guide", href: `/${r.slug}/guide` }, r.sub === "order" ? "play-order" : "getting-started");
-  if (r.id) path.push({ label: String(r.id), href: sessionHome(app.def, r.id) }, VIEW_PATH[r.view]);
-  promptSlot.replaceChildren(B.Prompt({ auth: { source: "/api/me" }, path }));
+  const labels = {};
+  if (r.view === "guide" && r.sub === "order") labels[`/${r.slug}/guide/order`] = "play-order";
+  if (r.id && VIEW_PATH[r.view]) labels[`/${r.slug}/${r.id}/${r.view}`] = VIEW_PATH[r.view];
+  promptSlot.replaceChildren(B.Prompt({ auth: { source: "/api/me" }, labels }));
 }
 function renderNav() {
   const r = app.route;

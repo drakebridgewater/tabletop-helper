@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"Bridgewater","components":[{"name":"Mark"},{"name":"Wordmark"},{"name":"Strip"},{"name":"Prompt"},{"name":"Whoami"},{"name":"Header"},{"name":"Button"},{"name":"Status"},{"name":"Count"},{"name":"Field"},{"name":"Panel"},{"name":"Rows"},{"name":"AppTile"},{"name":"Icon"},{"name":"ThemeToggle"},{"name":"Skyline"}]} */
+/* @ds-bundle: {"format":4,"namespace":"Bridgewater","components":[{"name":"Mark"},{"name":"Wordmark"},{"name":"Strip"},{"name":"Prompt"},{"name":"Whoami"},{"name":"Header"},{"name":"Button"},{"name":"Status"},{"name":"Count"},{"name":"Field"},{"name":"Panel"},{"name":"Dialog"},{"name":"Rows"},{"name":"AppTile"},{"name":"Icon"},{"name":"ThemeToggle"},{"name":"Skyline"}]} */
 (function (root) {
   "use strict";
   var doc = root.document;
@@ -92,11 +92,97 @@
     svg.appendChild(s("circle", { "class": "bw-lt-dot", cx: lt.dotx + ox, cy: 13.1 + oy, r: 1.7 }));
     return svg;
   }
+  /* The site name above the wordmark, in the same monoline lowercase: x-height 8 (y 6 to 14),
+     ascender at y 0, descender at y 20. The logotype's own letters are copied as they are.
+     Each glyph is [advance, path] plus 1 when it carries an open dot, as i and j do. */
+  var GLYPHS = {
+    a: [8, "M8 6 V14 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"], b: [8, "M0 0 V14 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"],
+    c: [7, "M6.83 7.17 A4 4 0 1 0 6.83 12.83"], d: [8, "M8 0 V14 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"],
+    e: [8, "M0 10 H8 A4 4 0 1 0 6.83 12.83"], f: [5.5, "M5.5 0.75 A3 3 0 0 0 2 3.5 V14 M0 6 H5.5"],
+    g: [8, "M8 6 V16 A4 4 0 0 1 4 20 H1 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"], h: [8, "M0 0 V14 M0 10 A4 4 0 0 1 8 10 V14"],
+    i: [0, "M0 6 V14", 1], j: [3, "M3 6 V17 A3 3 0 0 1 0 20", 1], k: [7, "M0 0 V14 M6.5 6 L0 11.2 M2.3 9.4 L7 14"],
+    l: [0, "M0 0 V14"], m: [12, "M0 6 V14 M0 9 A3 3 0 0 1 6 9 V14 M6 9 A3 3 0 0 1 12 9 V14"],
+    n: [8, "M0 6 V14 M0 10 A4 4 0 0 1 8 10 V14"], o: [8, "M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"],
+    p: [8, "M0 6 V20 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"], q: [8, "M8 6 V20 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"],
+    r: [5.5, "M0 6 V14 M0 10 A4 4 0 0 1 4 6 H5.5"], s: [6, "M6 6 H2 A2 2 0 0 0 2 10 H4 A2 2 0 0 1 4 14 H0"],
+    t: [6, "M2 2 V11 A3 3 0 0 0 5 14 H6 M0 6 H5.5"], u: [8, "M0 6 V10 A4 4 0 0 0 8 10 M8 6 V14"],
+    v: [7, "M0 6 L3.5 14 L7 6"], w: [11, "M0 6 L2.75 14 L5.5 6 L8.25 14 L11 6"], x: [7, "M0 6 L7 14 M7 6 L0 14"],
+    y: [8, "M0 6 V10 A4 4 0 0 0 8 10 M8 6 V16 A4 4 0 0 1 4 20 H1"], z: [7, "M0 6 H7 L0 14 H7"], "-": [5, "M0 10 H5"],
+    "0": [8, "M0 4 A4 4 0 0 1 8 4 V10 A4 4 0 0 1 0 10 Z"], "1": [3, "M0 2 L3 0 V14"], "2": [8, "M0 4 A4 4 0 0 1 8 4 L0 14 H8"],
+    "3": [8, "M0 0 H8 L3.5 5.6 A4.2 4.2 0 1 1 0.4 12"], "4": [8, "M6 14 V0 L0 10 H8"], "5": [8, "M7.5 0 H1 V5.6 A4.4 4.4 0 1 1 0.4 12.6"],
+    "6": [8, "M6.5 0.5 L1 8 M0 10 A4 4 0 1 0 8 10 A4 4 0 1 0 0 10 Z"], "7": [8, "M0 0 H8 L2.5 14"],
+    "8": [8, "M4 6 A3 3 0 1 0 4 0 A3 3 0 1 0 4 6 Z M4 6 A4 4 0 1 0 4 14 A4 4 0 1 0 4 6 Z"], "9": [8, "M1.5 13.5 L7 6 M8 4 A4 4 0 1 0 0 4 A4 4 0 1 0 8 4 Z"]
+  };
+  /* Lays a name out in glyph units: the paths, the x of each open dot, the width. null when a
+     character has no glyph, and the wordmark is then drawn without a site. */
+  function siteWord(name) {
+    var x = 0, paths = [], dots = [];
+    for (var i = 0; i < name.length; i++) {
+      var g = GLYPHS[name.charAt(i)];
+      if (!g) return null;
+      paths.push([x, g[1]]);
+      if (g[2]) dots.push(x + (name.charAt(i) === "j" ? 3 : 0));
+      x += g[0] + 3.6;
+    }
+    return name ? { paths: paths, dots: dots, w: x - 3.6 } : null;
+  }
+  /* A bus at y from the root out to each drop [x, y], with 2.5 chamfers where it turns down. */
+  function busPath(root, rootTop, y, drops) {
+    var xs = drops.map(function (d) { return d[0]; }).concat(root);
+    var L = Math.min.apply(null, xs), R = Math.max.apply(null, xs), c = 2.5;
+    var d = "M" + root + " " + rootTop + " V" + (y + c);
+    if (L < root) d += " M" + root + " " + (y + c) + " L" + (root - c) + " " + y + " H" + (L + c) + " L" + L + " " + (y + c);
+    if (R > root) d += " M" + root + " " + (y + c) + " L" + (root + c) + " " + y + " H" + (R - c) + " L" + R + " " + (y + c);
+    drops.forEach(function (p) { d += " M" + p[0] + " " + (p[0] === L || p[0] === R ? y + c : y) + " V" + p[1]; });
+    return d;
+  }
+  /* The wordmark with its mark, and the site name above it. The name ends in a solder point whose
+     trace rises to a bus over the name, drops onto each open dot, runs right and comes down into
+     the wordmark's junction, where its own dot's trace splits. Two links: the name to the top of
+     this app, the wordmark to the family hub. Units are the Logo's (with mark). */
+  function SiteLogo(height, site, siteHref, hubHref) {
+    var nm = siteWord(site), lt = D.lt;
+    if (!nm) return null;
+    var svg = Logo(height, true);
+    var xs = 24, jx = lt.dotx + 39, jy = 3;
+    /* a long name shrinks so it and its dot stay left of the trace coming down into the junction */
+    var S = Math.min(1.9, (jx - 7 - xs) / (nm.w + 6.8));
+    var base = /[gjpqy]/.test(site) ? -15 : -7, top = base - 14 * S, yb = top - 5;
+    var dx = xs + (nm.w + 4) * S, dy = base - 1.1 * S, pr = 4.2;
+    var g = s("g", { "class": "bw-lt-glyph bw-lt-site", transform: "translate(" + xs + " " + top + ") scale(" + S + ")", style: "stroke-width:" + Math.min(2.2, 1.16 * S) / S });
+    nm.paths.forEach(function (p) { g.appendChild(s("path", { transform: "translate(" + p[0] + " 0)", d: p[1] })); });
+    var link = s("a", { "class": "bw-lt-link", href: siteHref, "aria-label": site + " home" }, [
+      s("rect", { "class": "bw-lt-hit", x: xs - 2, y: yb - 1.5, width: dx + pr + 4 - xs, height: base + 7 - yb + 1.5 }), g]);
+    var drops = nm.dots.map(function (ix) {
+      var cx = xs + ix * S, cy = top + 1.9 * S;
+      link.appendChild(s("circle", { "class": "bw-lt-idot", cx: cx, cy: cy, r: 2, style: "stroke-width:0.9" }));
+      return [cx, cy - 2];
+    });
+    link.appendChild(s("circle", { "class": "bw-lt-halo", cx: dx, cy: dy, r: pr + 1.2 }));
+    link.appendChild(s("circle", { "class": "bw-lt-pad", cx: dx, cy: dy, r: pr, style: "stroke-width:0.8" }));
+    link.appendChild(s("circle", { "class": "bw-lt-dot", cx: dx, cy: dy, r: 2.55 }));
+    drops.push([jx, jy]);
+    /* the wordmark keeps everything it had, inside its own link */
+    var hub = s("a", { "class": "bw-lt-link", href: hubHref, "aria-label": "bridgewater.digital" }, [s("rect", { "class": "bw-lt-hit", x: -1, y: -2, width: 42 + lt.w, height: 35 })]);
+    while (svg.firstChild) hub.appendChild(svg.firstChild);
+    svg.appendChild(s("path", { "class": "bw-lt-trace", d: busPath(dx, dy - pr, yb, drops) }));
+    svg.appendChild(hub);
+    svg.appendChild(link);
+    var k = height * 1.5 / 32, vb = [-1, yb - 1.5, 42 + lt.w, 33 - yb + 1.5];
+    svg.setAttribute("viewBox", vb.join(" "));
+    svg.setAttribute("width", Math.round(vb[2] * k * 10) / 10);
+    svg.setAttribute("height", Math.round(vb[3] * k * 10) / 10);
+    svg.setAttribute("class", "bw-lt bw-lt--site");
+    svg.removeAttribute("aria-hidden");
+    return svg;
+  }
   function Wordmark(p) {
     p = p || {};
-    var height = p.height || 28;
+    /* With a site the lockup is taller, so the logotype sits at its 20px minimum by default. */
+    var site = p.site ? SiteLogo(p.height || 20, String(p.site).toLowerCase(), p.siteHref || "/", p.href || HOME) : null;
+    if (site) return h("span", { "class": "bw-wordmark" }, site);
     var el = h(p.href ? "a" : "span", { "class": "bw-wordmark", href: p.href, "aria-label": "bridgewater.digital" });
-    el.appendChild(Logo(height, p.mark !== false));
+    el.appendChild(Logo(p.height || 28, p.mark !== false));
     return el;
   }
 
@@ -104,33 +190,47 @@
   function Strip() { return h("div", { "class": "bw-strip", "aria-hidden": "true" }); }
 
   /* ---------- Prompt ---------- */
-  function normPath(path) {
-    if (path === undefined || path === null) return [{ label: "~" }];
-    if (typeof path === "string") {
-      var parts = path.split("/").filter(function (x) { return x !== ""; });
-      var out = [], acc = "";
-      for (var i = 0; i < parts.length; i++) {
-        if (parts[i] !== "~") acc += "/" + parts[i];
-        out.push({ label: parts[i], href: parts[i] === "~" ? "/" : acc });
-      }
-      return out.length ? out : [{ label: "~" }];
-    }
-    return path.map(function (seg) { return typeof seg === "string" ? { label: seg } : seg; });
+  /* The prompt is read off the URL, never written by hand, so every site says the same thing the same way:
+     user@<subdomain>:~/<path segments>. Apps may only relabel a segment (an id to a name). */
+  var ZONE = "bridgewater.digital";
+  function promptHost(hostname) {
+    if (hostname === ZONE) return "www";
+    var suffix = "." + ZONE;
+    if (hostname.length > suffix.length && hostname.slice(-suffix.length) === suffix) return hostname.slice(0, -suffix.length);
+    return hostname;
   }
+  function promptPath(pathname, labels) {
+    labels = labels || {};
+    var out = [{ label: "~", href: "/" }], acc = "";
+    var parts = pathname.split("/");
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === "") continue;
+      acc += "/" + parts[i];
+      var label;
+      try { label = decodeURIComponent(parts[i]); } catch (e) { label = parts[i]; }
+      out.push({ label: labels[acc] || label, href: acc });
+    }
+    return out;
+  }
+  var HOME = "https://social.bridgewater.digital";
   function Prompt(p) {
     p = p || {};
+    var url = new URL(p.url || root.location.href, root.location.href);
     var nav = h("nav", { "class": "bw-prompt", "aria-label": "You are here" });
-    var user = nav.appendChild(h("span", { "class": "bw-prompt__user" }, p.auth ? "…" : (p.user || "you")));
+    /* user links to the person's home (the family hub); the host links to the top of this app */
+    var userHref = p.userHref === undefined ? HOME : p.userHref;
+    var user = nav.appendChild(h(userHref ? "a" : "span", { "class": "bw-prompt__user", href: userHref || null, title: userHref ? "Home" : null }, p.auth ? "…" : (p.user || "you")));
     if (p.auth) whoami(p.auth).then(function (r) { user.textContent = r.user; });
     nav.appendChild(h("span", { "class": "bw-prompt__sep" }, "@"));
-    nav.appendChild(h("span", { "class": "bw-prompt__host" }, p.host || "omega"));
+    var host = promptHost(url.hostname);
+    nav.appendChild(h("a", { "class": "bw-prompt__host", href: url.origin + "/", title: host + " home" }, host));
     nav.appendChild(h("span", { "class": "bw-prompt__sep" }, ":"));
-    var path = normPath(p.path);
+    var path = promptPath(url.pathname, p.labels);
     for (var i = 0; i < path.length; i++) {
       var seg = path[i], last = i === path.length - 1;
       if (i > 0) nav.appendChild(h("span", { "class": "bw-prompt__sep" }, "/"));
-      if (seg.href && !last) nav.appendChild(h("a", { "class": "bw-prompt__seg", href: seg.href }, seg.label));
-      else nav.appendChild(h("span", { "class": "bw-prompt__seg", "aria-current": last ? "page" : null }, seg.label));
+      if (!last) nav.appendChild(h("a", { "class": "bw-prompt__seg", href: url.origin + seg.href }, seg.label));
+      else nav.appendChild(h("span", { "class": "bw-prompt__seg", "aria-current": "page" }, seg.label));
     }
     return nav;
   }
@@ -274,6 +374,60 @@
     return el;
   }
 
+  /* ---------- Dialog and confirm ---------- */
+  /* A native modal dialog: Escape and a click on the backdrop close it, focus stays inside.
+     Actions are submit buttons in a method="dialog" form, so each closes the dialog and
+     leaves its value in dialog.returnValue; an action's onClick can preventDefault() to
+     keep it open. The dialog is appended to the body; call showModal() to open it. */
+  function closeButton() {
+    return h("form", { method: "dialog", "class": "bw-dialog__close" }, Button({ icon: "close", iconOnly: true, size: "sm", ariaLabel: "Close", type: "submit" }));
+  }
+  function Dialog(p, kids) {
+    p = p || {};
+    var titleId = p.title ? "bw-d-" + (++uid) : null;
+    var dlg = h("dialog", { "class": cls("bw-dialog", p.className), "data-role": p.role || null, "aria-labelledby": titleId, "aria-label": titleId ? null : p.label });
+    if (p.title) dlg.appendChild(h("div", { "class": "bw-dialog__head" }, [h("h2", { "class": "bw-dialog__title", id: titleId }, p.title), p.close === false ? null : closeButton()]));
+    if (p.title || p.actions) add(dlg.appendChild(h("div", { "class": "bw-dialog__body" })), kids);
+    else add(dlg, kids);
+    if (p.actions && p.actions.length) {
+      var form = dlg.appendChild(h("form", { method: "dialog", "class": "bw-dialog__actions" }));
+      p.actions.forEach(function (a) {
+        if (a && a.nodeType) { form.appendChild(a); return; }
+        var b = form.appendChild(Button({ label: a.label, variant: a.variant, icon: a.icon, type: "submit", disabled: a.disabled, onClick: a.onClick }));
+        b.value = a.value !== undefined ? a.value : a.label;
+        if (a.autofocus) b.setAttribute("autofocus", "");
+      });
+    }
+    /* Backdrop clicks land on the dialog element itself; ignore a drag that started inside. */
+    var downOnSelf = false;
+    dlg.addEventListener("pointerdown", function (e) { downOnSelf = e.target === dlg; });
+    dlg.addEventListener("click", function (e) { if (p.dismiss !== false && downOnSelf && e.target === dlg) dlg.close(""); });
+    if (p.dismiss === false) dlg.addEventListener("cancel", function (e) { e.preventDefault(); });
+    if (p.onClose) dlg.addEventListener("close", function () { p.onClose(dlg.returnValue); });
+    if (p.mount !== false) doc.body.appendChild(dlg);
+    return dlg;
+  }
+  /* Ask before a destructive action. Resolves true only on the confirm button; Cancel,
+     Escape, the close button and the backdrop all resolve false. Focus starts on Cancel. */
+  function confirmDialog(o) {
+    o = typeof o === "string" ? { title: o } : o || {};
+    var danger = o.danger !== false;
+    var msg = o.message === undefined ? null : typeof o.message === "string" ? h("p", null, o.message) : o.message;
+    var dlg = Dialog({
+      title: o.title || "Are you sure?",
+      role: o.role || (danger ? "red" : "amber"),
+      actions: [
+        { label: o.cancel || "Cancel", value: "cancel", autofocus: true },
+        { label: o.confirm || (danger ? "Delete" : "Continue"), value: "confirm", variant: danger ? "danger" : "primary" }
+      ]
+    }, msg);
+    return new root.Promise(function (resolve) {
+      dlg.addEventListener("close", function () { resolve(dlg.returnValue === "confirm"); dlg.remove(); });
+      dlg.returnValue = "";
+      dlg.showModal();
+    });
+  }
+
   /* ---------- AppTile ---------- */
   function AppTile(p) {
     p = p || {};
@@ -336,17 +490,225 @@
     return btn;
   }
 
+  /* ---------- Apps: one launcher for every self-hosted app ---------- */
+  /* The family hub serves the signed-in person's apps at HOME/api/apps (filtered by their
+     groups); every app's header opens the same dialog on that list. Opens from the apps
+     button, "/" or Ctrl/Cmd+K; type to filter, arrow keys and Enter to open.
+     Response: { favorites: [app], sections: [{ title, apps: [app] }] },
+     app: { name, url, description, icon (image URL), glyph (an emoji the admin chose) } */
+  var APPS = HOME + "/api/apps";
+  var SIGNIN = "https://auth." + ZONE + "/";
+  var launcher = null;
+  function appTile(a) {
+    if (a.icon) return AppTile({ name: a.name, icon: a.icon });
+    if (a.glyph) return h("span", { "class": "bw-tile bw-tile--icon bw-tile--glyph", "aria-hidden": "true" }, a.glyph);
+    return AppTile({ name: a.name });
+  }
+  function Launcher(source) {
+    if (launcher) return launcher;
+    var input = h("input", { type: "search", "class": "bw-launcher__input", placeholder: "Find an app…", "aria-label": "Find an app", autocomplete: "off", spellcheck: "false" });
+    var list = h("div", { "class": "bw-launcher__list" });
+    var none = h("p", { "class": "bw-launcher__none", hidden: true }, "No apps match.");
+    var dlg = Dialog({ label: "Apps", className: "bw-launcher" }, [
+      h("div", { "class": "bw-launcher__head" }, [input, closeButton()]),
+      list,
+      h("p", { "class": "bw-launcher__foot" }, [h("kbd", null, "↑"), h("kbd", null, "↓"), " move · ", h("kbd", null, "Enter"), " open · ", h("kbd", null, "/"), " or ", h("kbd", null, "⌘K"), " from any page"])
+    ]);
+    var rows = [], groups = [], active = null, loaded = null;
+    function say(kids) { list.replaceChildren(h("p", { "class": "bw-launcher__none" }, kids)); }
+    function render(data) {
+      var all = (data.favorites && data.favorites.length ? [{ title: "Favorites", apps: data.favorites, fav: true }] : []).concat(data.sections || []);
+      list.replaceChildren();
+      all.forEach(function (g) {
+        var ul = h("ul", { role: "list" });
+        var sec = list.appendChild(h("section", { "class": "bw-launcher__group", "data-fav": g.fav ? "" : null }, [h("h3", { "class": "bw-launcher__title" }, g.title || "Apps"), ul]));
+        groups.push(sec);
+        (g.apps || []).forEach(function (a) {
+          var row = h("a", { "class": "bw-launcher__row", href: a.url, rel: "noopener", "data-search": (a.name + " " + (a.description || "") + " " + (g.fav ? "" : g.title || "")).toLowerCase() },
+            [appTile(a), h("span", { "class": "bw-launcher__name" }, a.name), a.description ? h("span", { "class": "bw-launcher__desc" }, a.description) : null]);
+          ul.appendChild(h("li", null, row));
+          rows.push(row);
+        });
+      });
+      if (!rows.length) say("No apps are shared with your account yet.");
+      else list.appendChild(none);
+      filter();
+    }
+    function load() {
+      if (loaded) return loaded;
+      say("Loading your apps…");
+      return (loaded = root.fetch(source, { credentials: "include", headers: { Accept: "application/json" } })
+        .then(function (res) {
+          if (res.status === 401 || res.status === 403) { say(["Sign in to see your apps. ", h("a", { href: HOME + "/login" }, "Sign in")]); loaded = null; return; }
+          if (!res.ok) throw new Error(res.status);
+          return res.json().then(render);
+        })
+        .catch(function () { say("Couldn't load your apps. Try again in a moment."); loaded = null; }));
+    }
+    function visible() { return rows.filter(function (r) { return !r.closest("[hidden]"); }); }
+    function setActive(row) {
+      if (active) active.classList.remove("is-active");
+      active = row || null;
+      if (row) { row.classList.add("is-active"); row.scrollIntoView({ block: "nearest" }); }
+    }
+    function filter() {
+      var words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+      rows.forEach(function (r) { r.parentNode.hidden = !words.every(function (w) { return r.getAttribute("data-search").indexOf(w) >= 0; }); });
+      groups.forEach(function (g) { g.hidden = (words.length > 0 && g.hasAttribute("data-fav")) || !g.querySelector("li:not([hidden])"); });
+      none.hidden = !rows.length || visible().length > 0;
+      setActive(words.length ? visible()[0] : null);
+    }
+    input.addEventListener("input", filter);
+    input.addEventListener("keydown", function (e) {
+      var v = visible(), i = active ? v.indexOf(active) : -1;
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (v.length) setActive(v[(i + (e.key === "ArrowDown" ? 1 : -1) + v.length) % v.length]);
+      } else if (e.key === "Enter" && (active || v[0])) {
+        e.preventDefault();
+        var href = (active || v[0]).href;
+        if (e.metaKey || e.ctrlKey) root.open(href, "_blank", "noopener"); else root.location.href = href;
+      }
+    });
+    function open() {
+      if (dlg.open) return;
+      input.value = "";
+      load();
+      filter();
+      dlg.showModal();
+      input.focus();
+    }
+    return (launcher = { open: open, dialog: dlg });
+  }
+  /* "/" and Ctrl/Cmd+K open the launcher from the moment a Header with apps is on the
+     page; the dialog itself is built on first use. Off while another dialog is open. */
+  function otherModal() {
+    try { return doc.querySelector("dialog:modal:not(.bw-launcher)"); }
+    catch (e) { return doc.querySelector("dialog[open]:not(.bw-launcher)"); } /* no :modal support */
+  }
+  var shortcutSource = null;
+  function wireAppsShortcut(source) {
+    if (shortcutSource || !doc.addEventListener) return;
+    shortcutSource = source;
+    doc.addEventListener("keydown", function (e) {
+      var el = e.target, typing = el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+      var cmdK = e.key && e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey) && !e.altKey;
+      var slash = e.key === "/" && !typing && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (!(cmdK || slash) || otherModal()) return;
+      e.preventDefault();
+      var l = Launcher(shortcutSource);
+      if (l.dialog.open) l.dialog.close(); else l.open();
+    });
+  }
+  function appsButton(source, menuItem) {
+    var b = menuItem
+      ? h("button", { type: "button" }, "Find an app")
+      : Button({ icon: "grid", iconOnly: true, ariaLabel: "Apps" });
+    if (!menuItem) { b.classList.add("bw-nav__apps"); b.setAttribute("title", "Apps (press /)"); }
+    b.setAttribute("aria-haspopup", "dialog");
+    b.addEventListener("click", function () { closeDrops(null); Launcher(source).open(); });
+    return b;
+  }
+
+  /* ---------- Nav: the site menu, account and apps, in the header bar ---------- */
+  /* At 900px and up: inline links, the account dropdown (or Sign in), then the apps button.
+     Below 900px all of it folds into one "Menu" dropdown, so the bar stays one row.
+     items: [{ label, href, current, children: [{ label, href, current }] }]
+     account: { label, name, detail, items: [{ label, href }] } when signed in
+     signIn: href when signed out
+     apps: the apps list URL, or false for none */
+  function navLink(it, cls) {
+    return h("a", { "class": cls || null, href: it.href, "aria-current": it.current ? "page" : null }, it.label);
+  }
+  function Nav(p) {
+    p = p || {};
+    var items = p.items || [], acct = p.account, apps = p.apps;
+    var nav = h("nav", { "class": "bw-nav", "aria-label": p.label || "Site" });
+    var inline = nav.appendChild(h("ul", { "class": "bw-nav__inline", role: "list" }));
+    items.forEach(function (it) {
+      var li = inline.appendChild(h("li"));
+      if (it.children && it.children.length) {
+        var sub = li.appendChild(h("details", { "class": "bw-nav__sub" }, [h("summary", null, it.label)]));
+        var panel = sub.appendChild(h("ul", { "class": "bw-nav__panel", role: "list" }));
+        if (it.href) panel.appendChild(h("li", null, navLink(it)));
+        it.children.forEach(function (c) { panel.appendChild(h("li", null, navLink(c))); });
+      } else li.appendChild(navLink(it));
+    });
+    if (acct) {
+      var who = acct.name || acct.detail ? h("p", { "class": "bw-nav__who" }, [h("strong", null, acct.name || acct.label), acct.detail ? h("span", null, acct.detail) : null]) : null;
+      var ad = nav.appendChild(h("details", { "class": "bw-nav__account" }, [h("summary", { "class": "bw-btn" }, acct.label)]));
+      var ap = ad.appendChild(h("div", { "class": "bw-nav__panel" }, who));
+      (acct.items || []).forEach(function (it) { ap.appendChild(navLink(it)); });
+    } else if (p.signIn) {
+      nav.appendChild(h("a", { "class": "bw-btn bw-nav__signin", href: p.signIn }, "Sign in"));
+    }
+    if (apps) nav.appendChild(appsButton(apps));
+    if (!items.length && !acct && !p.signIn && !apps) return nav;
+    var drop = nav.appendChild(h("details", { "class": "bw-nav__drop" }, [h("summary", { "class": "bw-btn" }, "Menu")]));
+    var list = drop.appendChild(h("ul", { "class": "bw-nav__panel", role: "list" }));
+    items.forEach(function (it) {
+      var li = list.appendChild(h("li", null, it.href ? navLink(it) : h("span", { "class": "bw-nav__group" }, it.label)));
+      if (it.children && it.children.length) {
+        var kids = li.appendChild(h("ul", { "class": "bw-nav__children", role: "list" }));
+        it.children.forEach(function (c) { kids.appendChild(h("li", null, navLink(c))); });
+      }
+    });
+    if (apps) list.appendChild(h("li", { "class": items.length ? "bw-nav__section" : null }, appsButton(apps, true)));
+    if (acct) {
+      var sec = list.appendChild(h("li", { "class": "bw-nav__section" }, [h("span", { "class": "bw-nav__group" }, acct.name || acct.label)]));
+      var ul = sec.appendChild(h("ul", { "class": "bw-nav__children", role: "list" }));
+      (acct.items || []).forEach(function (it) { ul.appendChild(h("li", null, navLink(it))); });
+    } else if (p.signIn) {
+      list.appendChild(h("li", { "class": "bw-nav__section" }, navLink({ label: "Sign in", href: p.signIn })));
+    }
+    return nav;
+  }
+  /* Header dropdowns close on a click outside them or on Escape, and opening one closes
+     the others. Installed once, for every details element in a .bw-header. */
+  function closeDrops(except) {
+    var open = doc.querySelectorAll(".bw-header details[open]");
+    for (var i = 0; i < open.length; i++) if (!open[i].contains(except) && open[i] !== except) open[i].removeAttribute("open");
+  }
+  var closeAll = closeDrops;
+  var dropsWired = false;
+  function wireDropdowns() {
+    if (dropsWired || !doc.addEventListener) return;
+    dropsWired = true;
+    doc.addEventListener("click", function (e) { closeAll(e.target); });
+    doc.addEventListener("keydown", function (e) {
+      if (e.key !== "Escape") return;
+      var open = doc.querySelector(".bw-header details[open]");
+      if (!open) return;
+      closeAll(null);
+      var sum = open.querySelector("summary");
+      if (sum) sum.focus();
+    });
+    doc.addEventListener("toggle", function (e) {
+      var d = e.target;
+      if (d.open && d.closest && d.closest(".bw-header")) closeAll(d);
+    }, true);
+  }
   /* ---------- Header ---------- */
   function Header(p) {
     p = p || {};
     var head = h("header", { "class": "bw-header" });
     head.appendChild(Strip());
     var bar = h("div", { "class": "bw-container bw-header__bar" });
-    bar.appendChild(Wordmark({ href: p.home || "/" }));
+    /* The wordmark goes home to the family hub, like the user name in the prompt; the site name
+       above it, read off the URL like the prompt's, goes to the top of this app. The root has none. */
+    var url = new URL(p.url || root.location.href, root.location.href);
+    var site = p.site === false || url.hostname === ZONE ? null : promptHost(url.hostname);
+    bar.appendChild(Wordmark({ href: p.home || HOME, site: site, siteHref: url.origin + "/" }));
+    var apps = p.apps === false ? null : typeof p.apps === "string" ? p.apps : APPS;
+    /* Signed out, Sign in is always there: to signIn, or by default the sign-in portal, returning here. */
+    var signIn = p.account ? null : p.signIn || SIGNIN + "?rd=" + encodeURIComponent(url.href);
+    bar.appendChild(Nav({ items: p.nav, label: p.navLabel, account: p.account, signIn: signIn, apps: apps }));
+    if (apps) wireAppsShortcut(apps);
+    wireDropdowns();
     if (p.themeToggle !== false) bar.appendChild(ThemeToggle());
     head.appendChild(bar);
     head.appendChild(h("div", { "class": "bw-header__rule" }));
-    head.appendChild(h("div", { "class": "bw-container bw-header__where" }, Prompt({ user: p.user, auth: p.auth, host: p.host, path: p.path })));
+    head.appendChild(h("div", { "class": "bw-container bw-header__where" }, Prompt({ user: p.user, auth: p.auth, userHref: p.userHref, url: p.url, labels: p.labels })));
     return head;
   }
 
@@ -372,6 +734,7 @@
     if (opts.sig) html.setAttribute("data-sig", opts.sig);
     if (opts.theme === "light" || opts.theme === "dark") theme.set(opts.theme, false);
     else if (!html.hasAttribute("data-theme")) theme.set(storedTheme() || systemTheme(), false);
+    wireDropdowns();
     return html;
   }
   function mount(target, node) {
@@ -382,11 +745,13 @@
   }
 
   root.Bridgewater = {
-    version: "1.0.0",
+    version: "2.0.0",
     icons: Object.keys(D.icons),
     Mark: Mark, Wordmark: Wordmark, Strip: Strip, Prompt: Prompt, Whoami: Whoami, Header: Header,
-    Button: Button, Status: Status, Count: Count, Field: Field, Panel: Panel, Rows: Rows,
+    Button: Button, Status: Status, Count: Count, Field: Field, Panel: Panel, Dialog: Dialog, Rows: Rows,
     AppTile: AppTile, Icon: Icon, ThemeToggle: ThemeToggle, Skyline: Skyline,
-    theme: theme, whoami: whoami, init: init, mount: mount
+    openApps: function (source) { Launcher(source || APPS).open(); },
+    confirm: confirmDialog, theme: theme, whoami: whoami, init: init, mount: mount
   };
-})(typeof window !== "undefined" ? window : this);
+  if (typeof module === "object" && module.exports) module.exports = root.Bridgewater;
+})(typeof window !== "undefined" ? window : globalThis);
